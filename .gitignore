@@ -9,3 +9,4 @@ cikti/
 # Kişisel ayarlar asla depoya girmesin / Never commit personal settings
 settings.json
 *.sftptmp
+github-release/
