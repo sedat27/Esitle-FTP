@@ -147,6 +147,23 @@ public sealed class MainForm : Form
         header.Controls.Add(btnFiles);
         header.RightButtons.Add(btnFiles);
 
+        var btnTheme = new RoundButton { Look = RoundButton.Kind.Secondary, Glyph = Glyph.Palette, Text = "Tema", Size = new Size(100, 36) };
+        var themeMenu = new ContextMenuStrip { Font = Theme.Base };
+        foreach (var (mode, label) in new[] { ("system", "Sistem (Windows'u izle)"), ("light", "Açık"), ("dark", "Koyu") })
+        {
+            var mi = new ToolStripMenuItem(label) { Tag = mode };
+            mi.Click += (_, _) => SetTheme(mode);
+            themeMenu.Items.Add(mi);
+        }
+        themeMenu.Opening += (_, _) =>
+        {
+            foreach (ToolStripMenuItem mi in themeMenu.Items) mi.Checked = (string)mi.Tag! == S.ThemeMode;
+        };
+        btnTheme.Click += (_, _) => themeMenu.Show(btnTheme, new Point(0, btnTheme.Height));
+        tip.SetToolTip(btnTheme, "Açık / koyu görünüm. Değişiklik uygulama yeniden başlatılınca geçerli olur.");
+        header.Controls.Add(btnTheme);
+        header.RightButtons.Add(btnTheme);
+
         Controls.Add(content);
         Controls.Add(header);
     }
@@ -1241,6 +1258,27 @@ public sealed class MainForm : Form
         S.HideSame = cbHideSame.Checked;
         S.SkipDotFiles = cbSkipDot.Checked;
         S.Save();
+    }
+
+    void SetTheme(string mode)
+    {
+        if (S.ThemeMode == mode) return;
+        S.ThemeMode = mode;
+        S.Save();
+
+        bool dark = mode switch { "dark" => true, "light" => false, _ => Theme.SystemDark() };
+        if (dark == Theme.Dark) return; // görünüm zaten aynı
+
+        if (busy)
+        {
+            Log("Tema seçimi kaydedildi; uygulama yeniden açılınca geçerli olacak.", Theme.Muted);
+            return;
+        }
+        if (MessageBox.Show(this, "Yeni tema uygulama yeniden başlatılınca geçerli olur.\n\nŞimdi yeniden başlatılsın mı?",
+                "Tema", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+            Application.Restart();
+        else
+            Log("Tema seçimi kaydedildi; uygulama yeniden açılınca geçerli olacak.", Theme.Muted);
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)

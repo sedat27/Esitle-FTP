@@ -29,6 +29,8 @@ public sealed class AppSettings
     public bool InheritOwner { get; set; } = true;
     public bool HideSame { get; set; } = true;
     public bool SkipDotFiles { get; set; } = true;
+    /// <summary>"system" (Windows'u izle), "light" ya da "dark". Uygulama açılışında okunur.</summary>
+    public string ThemeMode { get; set; } = "system";
     public Dictionary<string, string> KnownHosts { get; set; } = new();
     /// <summary>"sunucu|sunucu klasörü|yerel klasör" → sürekli atlanacak dosyaların göreli yolları</summary>
     public Dictionary<string, List<string>> AlwaysSkip { get; set; } = new();

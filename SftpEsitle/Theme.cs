@@ -9,10 +9,13 @@ namespace SftpEsitle;
 /// <summary>Windows 11 (Fluent) görünümü: açık/koyu renk paleti, yazı tipleri, simgeler.</summary>
 static class Theme
 {
-    /// <summary>Windows "uygulama modu" koyu mu? Uygulama açılışında bir kez okunur.</summary>
-    public static readonly bool Dark = ReadDark();
+    /// <summary>Ayarlardaki tema seçimi ("system", "light", "dark"). Uygulama açılışında bir kez okunur.</summary>
+    public static readonly string Mode = AppSettings.Load().ThemeMode is ("light" or "dark") and var m ? m : "system";
 
-    static bool ReadDark()
+    /// <summary>Koyu tema mı? Seçim "system" ise Windows "uygulama modu" izlenir.</summary>
+    public static readonly bool Dark = Mode switch { "dark" => true, "light" => false, _ => SystemDark() };
+
+    public static bool SystemDark()
     {
         try
         {
@@ -173,7 +176,8 @@ static class Glyph
     public const string Accept = "\uE73E", Folder = "\uE8B7", Document = "\uE8A5", Up = "\uE74A", Refresh = "\uE72C";
     public const string Search = "\uE721", OpenFile = "\uE8E5", Edit = "\uE70F", Globe = "\uE774", Connect = "\uE71B";
     public const string Disconnect = "\uE711", ChevronDown = "\uE70D", Stop = "\uE71A", Library = "\uE8F1", Install = "\uE896";
-    public const string Undo = "\uE7A7", Remove = "\uE738", Explorer = "\uEC50", Copy = "\uE8C8", Page = "\uE7C3";
+    public const string Palette = "";
+    public const string Undo ="\uE7A7", Remove = "\uE738", Explorer = "\uEC50", Copy = "\uE8C8", Page = "\uE7C3";
 }
 
 /// <summary>Pencere çerçevesine Windows 11 efektleri: Mica arka plan, koyu başlık çubuğu, yuvarlak köşeler.</summary>
