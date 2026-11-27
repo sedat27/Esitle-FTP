@@ -22,6 +22,16 @@ static class Installer
     /// <returns>true: kurulu kopya başlatıldı, bu pencere kapanmalı.</returns>
     public static bool RunInstallWizard(IWin32Window owner)
     {
+        // Tek dosya (PublishSingleFile) değilse exe yanındaki .dll'ler olmadan çalışmaz; kopyalamak kurulu sürümü bozar.
+        if (!string.IsNullOrEmpty(typeof(Installer).Assembly.Location))
+        {
+            MessageBox.Show(owner,
+                "Bu kopya tek dosyalık bir derleme değil (yanında .dll dosyaları var), bu yüzden kurulamaz.\n\n" +
+                "Kurulum için 'dotnet publish ... -p:PublishSingleFile=true' ile üretilen exe'yi kullanın.",
+                "Kurulum", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
+
         var ans = MessageBox.Show(owner,
             $"{AppName} bilgisayarına kurulacak:\n\n{InstallDir}\n\n" +
             "• Başlat menüsüne kısayol eklenir\n• Ayarlar > Uygulamalar listesinden kaldırılabilir\n• Yönetici yetkisi gerekmez\n\n" +
