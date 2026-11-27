@@ -1,0 +1,11 @@
+# Derleme çıktıları / Build output
+bin/
+obj/
+cikti/
+*.user
+*.suo
+.vs/
+
+# Kişisel ayarlar asla depoya girmesin / Never commit personal settings
+settings.json
+*.sftptmp
