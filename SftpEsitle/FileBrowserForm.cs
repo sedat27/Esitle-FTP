@@ -45,7 +45,7 @@ sealed class FileBrowserForm : Form
     int _loadVersion, _sortCol;
     bool _sortAsc = true, _loading, _reallyClose;
 
-    readonly RoundButton _btnLocal, _btnRemote, _btnUp, _btnRefresh, _btnNotepad, _btnDefault, _btnReveal;
+    readonly RoundButton _btnLocal, _btnRemote, _btnUp, _btnRefresh, _btnNotepad, _btnDefault, _btnReveal, _btnDelete;
     readonly InputBox _tbPath, _tbFilter;
     readonly ListView _list;
     readonly Label _lblStatus;
@@ -147,6 +147,7 @@ sealed class FileBrowserForm : Form
         _list.KeyDown += async (_, e) =>
         {
             if (e.KeyCode == Keys.Back) { e.SuppressKeyPress = true; await GoUp(); }
+            else if (e.KeyCode == Keys.Delete) { e.SuppressKeyPress = true; await DeleteSelected(); }
         };
         _list.Resize += (_, _) => FitColumns();
         _list.ContextMenuStrip = BuildMenu();
@@ -154,28 +155,32 @@ sealed class FileBrowserForm : Form
         root.Controls.Add(card, 0, 2);
 
         // ── Alt çubuk ──
-        var bottom = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, BackColor = Theme.Bg, Margin = new Padding(0), Padding = new Padding(0, 8, 0, 0) };
+        var bottom = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, RowCount = 1, BackColor = Theme.Bg, Margin = new Padding(0), Padding = new Padding(0, 8, 0, 0) };
         bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (int i = 0; i < 3; i++) bottom.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        for (int i = 0; i < 4; i++) bottom.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         _lblStatus = new Label { Dock = DockStyle.Fill, Font = Theme.Small, ForeColor = Theme.Muted, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
         _btnReveal = new RoundButton { Text = "Klasörde göster", Glyph = Glyph.Explorer, Look = RoundButton.Kind.Secondary, Size = new Size(130, 36), Margin = new Padding(8, 0, 0, 0) };
         _btnDefault = new RoundButton { Text = "Varsayılan programla aç", Glyph = Glyph.OpenFile, Look = RoundButton.Kind.Secondary, Size = new Size(170, 36), Margin = new Padding(8, 0, 0, 0) };
         _btnNotepad = new RoundButton { Text = "Notepad ile aç", Glyph = Glyph.Edit, Size = new Size(140, 36), Margin = new Padding(8, 0, 0, 0) };
+        _btnDelete = new RoundButton { Text = "Sil", Glyph = Glyph.Delete, Look = RoundButton.Kind.Secondary, TextColorOverride = Theme.Danger, Size = new Size(84, 36), Margin = new Padding(8, 0, 0, 0) };
+        _btnDelete.Click += async (_, _) => await DeleteSelected();
+        _tip.SetToolTip(_btnDelete, "Seçili dosyayı veya klasörü sil (Delete).\nSilmeden önce mutlaka onay istenir.");
         _btnReveal.Click += (_, _) => RevealSelected();
         _btnDefault.Click += async (_, _) => await ActivateSelected(notepad: false);
         _btnNotepad.Click += async (_, _) => await ActivateSelected(notepad: true);
         _tip.SetToolTip(_btnNotepad, "Çift tık veya Enter da aynı işi yapar.\nSunucu dosyası Notepad'de kaydedilince sunucuya yüklemek için sorulur.");
         bottom.Controls.Add(_lblStatus, 0, 0);
-        bottom.Controls.Add(_btnReveal, 1, 0);
-        bottom.Controls.Add(_btnDefault, 2, 0);
-        bottom.Controls.Add(_btnNotepad, 3, 0);
+        bottom.Controls.Add(_btnDelete, 1, 0);
+        bottom.Controls.Add(_btnReveal, 2, 0);
+        bottom.Controls.Add(_btnDefault, 3, 0);
+        bottom.Controls.Add(_btnNotepad, 4, 0);
         root.Controls.Add(bottom, 0, 3);
 
         Controls.Add(root);
         AutoScaleDimensions = new SizeF(96F, 96F);
         AutoScaleMode = AutoScaleMode.Dpi;
         ResumeLayout(false);
-        foreach (var b in new[] { _btnReveal, _btnDefault, _btnNotepad, _btnUp, _btnRefresh, _btnLocal, _btnRemote }) b.FitText();
+        foreach (var b in new[] { _btnDelete, _btnReveal, _btnDefault, _btnNotepad, _btnUp, _btnRefresh, _btnLocal, _btnRemote }) b.FitText();
     }
 
     ContextMenuStrip BuildMenu()
@@ -185,7 +190,8 @@ sealed class FileBrowserForm : Form
         var miDefault = new ToolStripMenuItem("Varsayılan programla aç", null, async (_, _) => await ActivateSelected(false));
         var miReveal = new ToolStripMenuItem("Klasörde göster", null, (_, _) => RevealSelected());
         var miCopy = new ToolStripMenuItem("Yolu kopyala", null, (_, _) => { if (Current is Entry e) Clipboard.SetText(e.FullPath); });
-        m.Items.AddRange(new ToolStripItem[] { miNotepad, miDefault, new ToolStripSeparator(), miReveal, miCopy });
+        var miDelete = new ToolStripMenuItem("Sil…", null, async (_, _) => await DeleteSelected()) { ShortcutKeyDisplayString = "Del", ForeColor = Theme.Danger };
+        m.Items.AddRange(new ToolStripItem[] { miNotepad, miDefault, new ToolStripSeparator(), miReveal, miCopy, new ToolStripSeparator(), miDelete });
         m.Opening += (_, e) =>
         {
             var cur = Current;
@@ -429,6 +435,7 @@ sealed class FileBrowserForm : Form
         _btnDefault.Enabled = file;
         _btnReveal.Visible = _side == Side.Local;
         _btnReveal.Enabled = cur != null && !_loading;
+        _btnDelete.Enabled = cur != null && !_loading;
         _btnUp.Enabled = !_loading;
         _btnRefresh.Enabled = !_loading;
     }
@@ -573,6 +580,92 @@ sealed class FileBrowserForm : Form
             return Array.IndexOf(buf, (byte)0, 0, n) < 0;
         }
         catch { return true; }
+    }
+
+    // ───────────────────────────── Silme ─────────────────────────────
+
+    /// <summary>Seçili dosya/klasörü onay aldıktan sonra siler. Yerelde Geri Dönüşüm Kutusu'na, sunucuda kalıcı.</summary>
+    async Task DeleteSelected()
+    {
+        var e = Current;
+        if (e == null || _loading) return;
+        var side = _side;
+        bool remote = side == Side.Remote;
+        string kind = e.IsDir ? "klasör" : "dosya";
+
+        string what = e.IsDir
+            ? $"“{e.Name}” klasörü İÇİNDEKİ TÜM DOSYA VE KLASÖRLERLE birlikte silinecek."
+            : $"“{e.Name}” dosyası silinecek" + $"  ({Fmt.Size(e.Size)}).";
+        string where = remote
+            ? "⚠  SUNUCUDAN silinecek. Bu işlem GERİ ALINAMAZ!"
+            : "Yerel bilgisayardan silinecek (Geri Dönüşüm Kutusu'na gider).";
+        var r = MessageBox.Show(this,
+            $"{what}\n\n{where}\n\n{e.FullPath}\n\nSilmek istediğine emin misin?",
+            remote ? $"DİKKAT — Sunucudan {kind} silinecek" : $"{char.ToUpper(kind[0])}{kind[1..]} silinsin mi?",
+            MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+        if (r != DialogResult.Yes) return;
+
+        // Sunucudaki klasör için ikinci onay
+        if (remote && e.IsDir && MessageBox.Show(this,
+                $"Son onay: sunucudaki “{e.Name}” klasörü ve içindeki her şey kalıcı olarak silinecek.\n\nDevam edilsin mi?",
+                "Son onay", MessageBoxButtons.YesNo, MessageBoxIcon.Stop, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+
+        SetStatus($"Siliniyor: {e.Name}…");
+        UseWaitCursor = true;
+        try
+        {
+            if (!remote)
+            {
+                await Task.Run(() =>
+                {
+                    if (e.IsDir)
+                        Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(e.FullPath,
+                            Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+                    else
+                        Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(e.FullPath,
+                            Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+                });
+            }
+            else
+            {
+                if (await EnsureClient() == null) { SetStatus("Sunucuya bağlanılamadı, silinmedi.", Theme.Danger); return; }
+                await RunRemote(cl => { if (e.IsDir) DeleteRemoteTree(cl, e.FullPath); else cl.DeleteFile(e.FullPath); return 0; });
+                DropEdits(e.FullPath, e.IsDir);
+            }
+            UseWaitCursor = false;
+            if (_side == side) await LoadDir();
+            SetStatus($"✓  “{e.Name}” silindi" + (remote ? " (sunucudan)" : " (Geri Dönüşüm Kutusu'na)") + WatchNote(), Theme.Ok);
+        }
+        catch (OperationCanceledException) { SetStatus("Silme iptal edildi."); }
+        catch (Exception ex)
+        {
+            SetStatus("Silinemedi: " + ex.Message, Theme.Danger);
+            MessageBox.Show(this, $"“{e.Name}” silinemedi.\n\n{ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            if (_side == side) await LoadDir(selectPath: e.FullPath);
+        }
+        finally { UseWaitCursor = false; }
+    }
+
+    static void DeleteRemoteTree(SftpClient c, string dir)
+    {
+        foreach (var x in c.ListDirectory(dir))
+        {
+            if (x.Name is "." or "..") continue;
+            if (x.IsDirectory && !x.IsSymbolicLink) DeleteRemoteTree(c, x.FullName);
+            else c.DeleteFile(x.FullName);
+        }
+        c.DeleteDirectory(dir);
+    }
+
+    /// <summary>Silinen sunucu yolu (veya altı) için Notepad izlemelerini bırakır.</summary>
+    void DropEdits(string path, bool isDir)
+    {
+        var prefix = path.TrimEnd('/') + "/";
+        foreach (var key in _edits.Keys.Where(k => k == path || (isDir && k.StartsWith(prefix, StringComparison.Ordinal))).ToList())
+        {
+            _edits[key].Dispose();
+            _edits.Remove(key);
+        }
     }
 
     // ───────────────────────────── Düzenleme izleme ─────────────────────────────
