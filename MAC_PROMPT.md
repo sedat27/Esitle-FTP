@@ -1,6 +1,6 @@
 # macOS için “SFTP Eşitle” uygulaması — Yapay zekaya verilecek prompt
 
-> Aşağıdaki metnin tamamını (bu satırın altından itibaren) Mac'teki yapay zekaya (Claude Code, Cursor, Xcode asistanı vb.) yapıştır.
+> Aşağıdaki metnin tamamını (bu satırın altından itibaren) Mac'teki yapay zeka asistanına yapıştır.
 
 ---
 
